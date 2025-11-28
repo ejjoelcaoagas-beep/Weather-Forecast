@@ -42,20 +42,23 @@ def GetSunTimes(lat: float, lon: float, date: str, tz_id: str):
     return {"sunrise": j.get("sunrise"), "sunset": j.get("sunset")}
 
 
-def Get24HourRainForecast(lat: float, lon: float):
+def Get24HourPrecipitationProbability(lat: float, lon: float):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
-        f"&hourly=precipitation&forecast_days=2"
+        f"&hourly=precipitation_probability&forecast_days=2"
     )
     r = requests.get(url)
     r.raise_for_status()
     j = r.json()
+
     times_all = j["hourly"]["time"]
-    rain_all = j["hourly"]["precipitation"]
-    times_24 = [dt.fromisoformat(t).strftime("%m-%d %H:%M") for t in times_all[:24]]
-    rain_24 = rain_all[:24]
-    return times_24, rain_24
+    precip_prob_all = j["hourly"]["precipitation_probability"]
+
+    times_24 = [dt.fromisoformat(t).strftime("%m-%d %I:%M %p") for t in times_all[:24]]
+    precip_prob_24 = precip_prob_all[:24]
+
+    return times_24, precip_prob_24
 
 
 class MainGUI(custom.CTk):
@@ -74,7 +77,7 @@ class MainGUI(custom.CTk):
 
         input_frame = custom.CTkFrame(main, fg_color="#f8cadd")
         input_frame.grid(row=1, column=0, sticky="we", pady=6)
-        for i in range(3):
+        for i in range(4):
             input_frame.grid_columnconfigure(i, weight=1)
 
         self.location_entry = custom.CTkEntry(input_frame, placeholder_text="Input location here", font=global_font)
@@ -106,8 +109,6 @@ class MainGUI(custom.CTk):
         self.forecast_panel = custom.CTkFrame(main, fg_color="#ffffff", corner_radius=18, height=450)
         self.forecast_panel.grid(row=3, column=0, sticky="we", padx=16, pady=(6,10))
         self.forecast_panel.grid_propagate(False)
-        self.forecast_title_var = StringVar(value="24-Hour Rain Forecast")
-        custom.CTkLabel(self.forecast_panel, textvariable=self.forecast_title_var, font=global_font_bold, text_color="black").pack(pady=(10,0))
 
         self.set_idle_texts()
 
@@ -122,9 +123,11 @@ class MainGUI(custom.CTk):
             date = self.date_var.get().strip()
             tz_map = {"UTC+8": "UTC+8", "UTC+0": "UTC+0", "EST (UTC-5)": "UTC-5", "CET (UTC+1)": "UTC+1"}
             tz = tz_map[self.timezone_box.get()]
+
             self.lat, self.lon, location_name = GetCoordinates(city)
             sun = GetSunTimes(self.lat, self.lon, date, tz)
 
+            # Sunrise/Sunset
             sun_title = f"Sun times for {location_name} on {date}"
             lines = []
             if sun.get("sunrise"): lines.append(f"Sunrise: {sun['sunrise']}")
@@ -132,12 +135,13 @@ class MainGUI(custom.CTk):
             self.sun_title_var.set(sun_title)
             self.sun_text_var.set("\n".join(lines))
 
-            times, rain = Get24HourRainForecast(self.lat, self.lon)
+            # Precipitation Probability
+            times, precip_prob = Get24HourPrecipitationProbability(self.lat, self.lon)
 
             for widget in self.forecast_panel.winfo_children():
                 widget.destroy()
 
-            custom.CTkLabel(self.forecast_panel, text="24-Hour Rain Forecast",
+            custom.CTkLabel(self.forecast_panel, text="24-Hour Precipitation Probability",
                             font=global_font_bold, text_color="black").pack(pady=(10,0))
 
             fig, ax = plt.subplots(figsize=(14, 5))
@@ -145,13 +149,13 @@ class MainGUI(custom.CTk):
             ax.set_facecolor("white")
 
             marker_interval = max(1, len(times) // 12)
+            ax.plot(times, precip_prob, marker="o", markevery=marker_interval,
+                    linewidth=2, markersize=6, label="Precipitation Probability (%)")
 
-            ax.plot(times, rain, marker="o", markevery=marker_interval,
-                    linewidth=2, markersize=6, label="Rain (mm)")
-
-            ax.set_ylabel("Rain (mm)")
-            ax.set_title("Hourly Rainfall Forecast (Next 24 Hours)", fontsize=16, pad=14)
+            ax.set_ylabel("Precipitation Probability (%)")
+            ax.set_title("Hourly Precipitation Probability (Next 24 Hours)", fontsize=16, pad=14)
             ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.6)
+            ax.set_yticks(list(range(0, 110, 10)))
 
             xtick_step = max(1, len(times) // 12)
             ax.set_xticks(range(0, len(times), xtick_step))
@@ -159,7 +163,6 @@ class MainGUI(custom.CTk):
                                rotation=45, ha="right")
 
             fig.tight_layout()
-
             canvas = FigureCanvasTkAgg(fig, master=self.forecast_panel)
             canvas.draw()
             canvas.get_tk_widget().pack(fill="both", expand=True)
