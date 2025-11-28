@@ -46,16 +46,16 @@ def Get24HourRainForecast(lat: float, lon: float):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
-        f"&hourly=precipitation_probability&forecast_days=2"
+        f"&hourly=precipitation&forecast_days=2"
     )
     r = requests.get(url)
     r.raise_for_status()
     j = r.json()
     times_all = j["hourly"]["time"]
-    rain_prob_all = j["hourly"]["precipitation_probability"]
-    times_24 = [dt.fromisoformat(t).strftime("%m-%d %I:%M %p") for t in times_all[:24]]
-    rain_prob_24 = rain_prob_all[:24]
-    return times_24, rain_prob_24
+    rain_all = j["hourly"]["precipitation"]
+    times_24 = [dt.fromisoformat(t).strftime("%m-%d %H:%M") for t in times_all[:24]]
+    rain_24 = rain_all[:24]
+    return times_24, rain_24
 
 
 class MainGUI(custom.CTk):
@@ -106,7 +106,7 @@ class MainGUI(custom.CTk):
         self.forecast_panel = custom.CTkFrame(main, fg_color="#ffffff", corner_radius=18, height=450)
         self.forecast_panel.grid(row=3, column=0, sticky="we", padx=16, pady=(6,10))
         self.forecast_panel.grid_propagate(False)
-        self.forecast_title_var = StringVar(value="24-Hour Chance of Rain")
+        self.forecast_title_var = StringVar(value="24-Hour Rain Forecast")
         custom.CTkLabel(self.forecast_panel, textvariable=self.forecast_title_var, font=global_font_bold, text_color="black").pack(pady=(10,0))
 
         self.set_idle_texts()
@@ -132,12 +132,12 @@ class MainGUI(custom.CTk):
             self.sun_title_var.set(sun_title)
             self.sun_text_var.set("\n".join(lines))
 
-            times, rain_prob = Get24HourRainForecast(self.lat, self.lon)
+            times, rain = Get24HourRainForecast(self.lat, self.lon)
 
             for widget in self.forecast_panel.winfo_children():
                 widget.destroy()
 
-            custom.CTkLabel(self.forecast_panel, text="24-Hour Chance of Rain",
+            custom.CTkLabel(self.forecast_panel, text="24-Hour Rain Forecast",
                             font=global_font_bold, text_color="black").pack(pady=(10,0))
 
             fig, ax = plt.subplots(figsize=(14, 5))
@@ -146,14 +146,12 @@ class MainGUI(custom.CTk):
 
             marker_interval = max(1, len(times) // 12)
 
-            ax.plot(times, rain_prob, marker="o", markevery=marker_interval,
-                    linewidth=2, markersize=6, label="Chance of Rain (%)")
+            ax.plot(times, rain, marker="o", markevery=marker_interval,
+                    linewidth=2, markersize=6, label="Rain (mm)")
 
-            ax.set_ylabel("Chance of Rain (%)")
-            ax.set_title("Hourly Chance of Rain (Next 24 Hours)", fontsize=16, pad=14)
+            ax.set_ylabel("Rain (mm)")
+            ax.set_title("Hourly Rainfall Forecast (Next 24 Hours)", fontsize=16, pad=14)
             ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.6)
-
-            ax.set_yticks(list(range(0, 110, 10)))  # 0, 10, 20, ..., 100
 
             xtick_step = max(1, len(times) // 12)
             ax.set_xticks(range(0, len(times), xtick_step))
