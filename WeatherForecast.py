@@ -21,6 +21,12 @@ custom.set_default_color_theme("blue")
 def GetCoordinates(city: str):
     coor_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=en"
     resp = requests.get(coor_url).json()
+    r_status = requests.get(coor_url)
+    if r_status.status_code == 200:
+        pass
+    else:
+        print(f"Non-functional API. Error Code {r_status.status_code}")
+    
     if "results" not in resp or len(resp["results"]) == 0:
         raise ValueError("City not found")
     result = resp["results"][0]
@@ -35,13 +41,26 @@ def GetSunTimes(lat: float, lon: float, date: str, tz_id: str):
     url = "https://sunrise-sunset-times.p.rapidapi.com/getSunTimes"
     params = {"latitude": lat, "longitude": lon, "date": date, "timeZoneId": tz_id}
     r = requests.get(url, headers=headers, params=params, timeout=10)
-    r.raise_for_status()
+    r_status = requests.get(url, headers=headers, params=params, timeout=10)
+
+    if r_status.status_code == 200:
+        pass
+    else:
+        print(f"Non-functional API. Error Code {r_status.status_code}")
+        
     j = r.json()
     return {"sunrise": j.get("sunrise"), "sunset": j.get("sunset")}
 
 def Get5DayForecast(lat: float, lon: float):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,relativehumidity_2m&forecast_days=1"
     r = requests.get(url)
+    r_status = requests.get(url)
+    
+    if r_status.status_code == 200:
+        pass
+    else:
+        print(f"Non-functional API. Error Code {r_status.status_code}")
+        
     r.raise_for_status()
     j = r.json()
     times = [dt.fromisoformat(t).strftime("%m-%d %H:%M") for t in j["hourly"]["time"]]
