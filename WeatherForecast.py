@@ -40,7 +40,7 @@ def GetSunTimes(lat: float, lon: float, date: str, tz_id: str):
     return {"sunrise": j.get("sunrise"), "sunset": j.get("sunset")}
 
 def Get5DayForecast(lat: float, lon: float):
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,relativehumidity_2m&forecast_days=5"
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,relativehumidity_2m&forecast_days=1"
     r = requests.get(url)
     r.raise_for_status()
     j = r.json()
@@ -52,7 +52,7 @@ def Get5DayForecast(lat: float, lon: float):
 class MainGUI(custom.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Sunrise, Sunset & 5-Day Forecast")
+        self.title("Sunrise and Sunset Weather Location Clock")
         self.geometry("1100x700")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -61,7 +61,7 @@ class MainGUI(custom.CTk):
         main.grid(row=0, column=0, sticky="nswe", padx=12, pady=12)
         main.grid_columnconfigure(0, weight=1)
 
-        custom.CTkLabel(main, text="Sunrise, Sunset & 5-Day Forecast", font=title_font, text_color="black").grid(row=0, column=0, pady=(10,6))
+        custom.CTkLabel(main, text="Sunrise and Sunset Weather Location Clock", font=title_font, text_color="black").grid(row=0, column=0, pady=(10,6))
 
         input_frame = custom.CTkFrame(main, fg_color="#f8cadd")
         input_frame.grid(row=1, column=0, sticky="we", pady=6)
@@ -95,7 +95,7 @@ class MainGUI(custom.CTk):
         self.forecast_panel.grid(row=3, column=0, sticky="we", padx=16, pady=(6,10))
         self.forecast_panel.grid_propagate(False)
         self.forecast_title_var = StringVar()
-        self.forecast_title_var.set("5-Day Forecast (3-Hour Intervals)")
+        self.forecast_title_var.set("24-Hour Humidity and Temperature Forecast")
         custom.CTkLabel(self.forecast_panel, textvariable=self.forecast_title_var, font=global_font_bold, text_color="black").pack(pady=(10,0))
 
         self.set_idle_texts()
@@ -144,7 +144,7 @@ class MainGUI(custom.CTk):
             ax.set_xticks(range(0, len(times), xtick_step))
             ax.set_xticklabels([times[i] for i in range(0, len(times), xtick_step)], rotation=45, ha="right")
 
-            ax.set_title("3-Hour Temperature & Humidity Forecast (Next 5 Days)", fontsize=16, pad=14)
+            ax.set_title("24-Hour Humidity and Temperature Forecast", fontsize=16, pad=14)
             ax.legend(loc="upper left")
 
             fig.tight_layout()
