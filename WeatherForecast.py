@@ -18,6 +18,7 @@ headers = {
 custom.set_appearance_mode("light")
 custom.set_default_color_theme("blue")
 
+
 def GetCoordinates(city: str):
     coor_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=en"
     resp = requests.get(coor_url).json()
@@ -31,6 +32,7 @@ def GetCoordinates(city: str):
     location_name = f"{name}, {country}" if country else name
     return float(lat), float(lon), location_name
 
+
 def GetSunTimes(lat: float, lon: float, date: str, tz_id: str):
     url = "https://sunrise-sunset-times.p.rapidapi.com/getSunTimes"
     params = {"latitude": lat, "longitude": lon, "date": date, "timeZoneId": tz_id}
@@ -39,20 +41,27 @@ def GetSunTimes(lat: float, lon: float, date: str, tz_id: str):
     j = r.json()
     return {"sunrise": j.get("sunrise"), "sunset": j.get("sunset")}
 
-def Get5DayForecast(lat: float, lon: float):
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=temperature_2m,relativehumidity_2m&forecast_days=5"
+
+def Get24HourRainForecast(lat: float, lon: float):
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&hourly=precipitation_probability&forecast_days=2"
+    )
     r = requests.get(url)
     r.raise_for_status()
     j = r.json()
-    times = [dt.fromisoformat(t).strftime("%m-%d %H:%M") for t in j["hourly"]["time"]]
-    temps = j["hourly"]["temperature_2m"]
-    hums = j["hourly"]["relativehumidity_2m"]
-    return times, temps, hums
+    times_all = j["hourly"]["time"]
+    rain_prob_all = j["hourly"]["precipitation_probability"]
+    times_24 = [dt.fromisoformat(t).strftime("%m-%d %I:%M %p") for t in times_all[:24]]
+    rain_prob_24 = rain_prob_all[:24]
+    return times_24, rain_prob_24
+
 
 class MainGUI(custom.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Sunrise, Sunset & 5-Day Forecast")
+        self.title("Sunrise, Sunset & Rain Forecast")
         self.geometry("1100x700")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -61,7 +70,7 @@ class MainGUI(custom.CTk):
         main.grid(row=0, column=0, sticky="nswe", padx=12, pady=12)
         main.grid_columnconfigure(0, weight=1)
 
-        custom.CTkLabel(main, text="Sunrise, Sunset & 5-Day Forecast", font=title_font, text_color="black").grid(row=0, column=0, pady=(10,6))
+        custom.CTkLabel(main, text="Sunrise, Sunset & Rain Forecast", font=title_font, text_color="black").grid(row=0, column=0, pady=(10,6))
 
         input_frame = custom.CTkFrame(main, fg_color="#f8cadd")
         input_frame.grid(row=1, column=0, sticky="we", pady=6)
@@ -71,7 +80,10 @@ class MainGUI(custom.CTk):
         self.location_entry = custom.CTkEntry(input_frame, placeholder_text="Input location here", font=global_font)
         self.location_entry.grid(row=0, column=0, padx=8, pady=6, sticky="we")
 
-        self.timezone_box = custom.CTkComboBox(input_frame, values=["UTC+8", "UTC+0", "EST (UTC-5)", "CET (UTC+1)"], width=150, font=global_font, dropdown_font=global_font)
+        self.timezone_box = custom.CTkComboBox(input_frame,
+            values=["UTC+8", "UTC+0", "EST (UTC-5)", "CET (UTC+1)"],
+            width=150, font=global_font, dropdown_font=global_font
+        )
         self.timezone_box.set("UTC+8")
         self.timezone_box.grid(row=0, column=1, padx=8, pady=6)
 
@@ -94,8 +106,7 @@ class MainGUI(custom.CTk):
         self.forecast_panel = custom.CTkFrame(main, fg_color="#ffffff", corner_radius=18, height=450)
         self.forecast_panel.grid(row=3, column=0, sticky="we", padx=16, pady=(6,10))
         self.forecast_panel.grid_propagate(False)
-        self.forecast_title_var = StringVar()
-        self.forecast_title_var.set("5-Day Forecast (3-Hour Intervals)")
+        self.forecast_title_var = StringVar(value="24-Hour Chance of Rain")
         custom.CTkLabel(self.forecast_panel, textvariable=self.forecast_title_var, font=global_font_bold, text_color="black").pack(pady=(10,0))
 
         self.set_idle_texts()
@@ -113,6 +124,7 @@ class MainGUI(custom.CTk):
             tz = tz_map[self.timezone_box.get()]
             self.lat, self.lon, location_name = GetCoordinates(city)
             sun = GetSunTimes(self.lat, self.lon, date, tz)
+
             sun_title = f"Sun times for {location_name} on {date}"
             lines = []
             if sun.get("sunrise"): lines.append(f"Sunrise: {sun['sunrise']}")
@@ -120,32 +132,33 @@ class MainGUI(custom.CTk):
             self.sun_title_var.set(sun_title)
             self.sun_text_var.set("\n".join(lines))
 
-            times, temps, hums = Get5DayForecast(self.lat, self.lon)
+            times, rain_prob = Get24HourRainForecast(self.lat, self.lon)
 
             for widget in self.forecast_panel.winfo_children():
                 widget.destroy()
-            custom.CTkLabel(self.forecast_panel, textvariable=self.forecast_title_var, font=global_font_bold, text_color="black").pack(pady=(10,0))
+
+            custom.CTkLabel(self.forecast_panel, text="24-Hour Chance of Rain",
+                            font=global_font_bold, text_color="black").pack(pady=(10,0))
 
             fig, ax = plt.subplots(figsize=(14, 5))
             fig.patch.set_facecolor("white")
             ax.set_facecolor("white")
 
-            marker_interval = max(1, len(times) // 20)
+            marker_interval = max(1, len(times) // 12)
 
-            ax.plot(times, temps, color="#1f77b4", marker="o", markevery=marker_interval, markersize=6, linewidth=2, label="Temperature (°C)")
-            ax.plot(times, hums, color="#ff7f0e", marker="s", markevery=marker_interval, markersize=6, linewidth=2, label="Humidity (%)")
+            ax.plot(times, rain_prob, marker="o", markevery=marker_interval,
+                    linewidth=2, markersize=6, label="Chance of Rain (%)")
 
-            ax.set_ylabel("Value")
-            ax.set_ylim(min(min(temps), min(hums)) - 5, max(max(temps), max(hums)) + 5)
+            ax.set_ylabel("Chance of Rain (%)")
+            ax.set_title("Hourly Chance of Rain (Next 24 Hours)", fontsize=16, pad=14)
+            ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.6)
 
-            ax.grid(True, which="both", linestyle="--", linewidth=0.6, alpha=0.6)
+            ax.set_yticks(list(range(0, 110, 10)))  # 0, 10, 20, ..., 100
 
-            xtick_step = max(1, len(times) // 20)
+            xtick_step = max(1, len(times) // 12)
             ax.set_xticks(range(0, len(times), xtick_step))
-            ax.set_xticklabels([times[i] for i in range(0, len(times), xtick_step)], rotation=45, ha="right")
-
-            ax.set_title("3-Hour Temperature & Humidity Forecast (Next 5 Days)", fontsize=16, pad=14)
-            ax.legend(loc="upper left")
+            ax.set_xticklabels([times[i] for i in range(0, len(times), xtick_step)],
+                               rotation=45, ha="right")
 
             fig.tight_layout()
 
